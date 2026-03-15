@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Baumarkt Bros.</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -19,6 +22,8 @@
     position: fixed;
     inset: 0;
     width: 100%; height: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
     display: flex;
@@ -36,7 +41,7 @@
   canvas { display: block; background: #87CEEB; width: 100%; height: 100%; }
   #ui-overlay {
     position: absolute; top: 0; left: 0; right: 0;
-    padding: 16px 24px;
+    padding: max(16px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 16px max(24px, env(safe-area-inset-left));
     display: flex; justify-content: space-between; align-items: flex-start;
     pointer-events: none; z-index: 10;
     background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
@@ -102,7 +107,7 @@
     .ctrl-btn { width: 50px; height: 50px; font-size: 20px; }
   }
   #collectedBar {
-    position: absolute; top: 60px; left: 50%;
+    position: absolute; top: max(60px, calc(env(safe-area-inset-top) + 60px)); left: 50%;
     transform: translateX(-50%);
     display: flex; gap: 3px; z-index: 11;
     pointer-events: none; flex-wrap: wrap;
@@ -161,7 +166,9 @@
   /* ── MOBILE RESPONSIVE ── */
   @media (pointer: coarse) {
     #soundToggle {
-      bottom: auto; top: 12px; right: 12px;
+      bottom: auto;
+      top: max(12px, env(safe-area-inset-top));
+      right: max(12px, env(safe-area-inset-right));
       padding: 10px 16px; font-size: 11px;
     }
   }
@@ -252,7 +259,10 @@ const ctx = canvas.getContext('2d');
 // Responsive sizing - fullscreen
 let BASE_W = 800, BASE_H = 450;
 function resize() {
-  const ratio = window.innerWidth / window.innerHeight;
+  const vp = window.visualViewport;
+  const vw = vp ? vp.width : window.innerWidth;
+  const vh = vp ? vp.height : window.innerHeight;
+  const ratio = vw / vh;
   // Keep logical resolution proportional but fill screen
   if (ratio > BASE_W / BASE_H) {
     BASE_H = 450;
@@ -263,9 +273,14 @@ function resize() {
   }
   canvas.width = BASE_W;
   canvas.height = BASE_H;
+  ctx.imageSmoothingEnabled = false;
 }
 resize();
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resize);
+}
 
 // ── GAME STATE ──
 const GRAVITY = 0.6, JUMP_FORCE = -11, MOVE_SPEED = 4;
