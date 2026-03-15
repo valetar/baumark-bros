@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Baumarkt Bros.</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #1a1a2e;
+    font-family: 'Press Start 2P', monospace;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
+    width: 100%; height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #gameContainer {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    image-rendering: pixelated;
+  }
+  canvas { display: block; background: #87CEEB; width: 100%; height: 100%; }
+  #ui-overlay {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 16px 24px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none; z-index: 10;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  }
+  .ui-box {
+    color: #fff; font-size: 14px; line-height: 2;
+    text-shadow: 2px 2px 0 #000;
+  }
+  .ui-box .label { color: #ffd700; }
+  #startScreen, #gameOverScreen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.88); z-index: 20;
+    color: #fff; text-align: center;
+  }
+  #startScreen h1, #gameOverScreen h1 {
+    font-size: 32px; color: #e94560;
+    text-shadow: 3px 3px 0 #000;
+    margin-bottom: 30px; line-height: 1.6;
+  }
+  #startScreen p, #gameOverScreen p {
+    font-size: 12px; line-height: 2.4; color: #ccc;
+    max-width: 700px;
+  }
+  .blink {
+    animation: blink 1s infinite;
+    color: #ffd700; margin-top: 40px; font-size: 14px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  #gameOverScreen .score { font-size: 36px; color: #ffd700; margin: 20px 0; }
+  #mobileControls {
+    display: none;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    z-index: 15;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+    justify-content: space-between; align-items: flex-end;
+    pointer-events: none;
+  }
+  .ctrl-group { display: flex; gap: 12px; pointer-events: auto; }
+  .ctrl-btn {
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.35);
+    border-radius: 16px; color: #fff; font-size: 26px;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ctrl-btn:active, .ctrl-btn.pressed {
+    background: rgba(255,255,255,0.45);
+    border-color: rgba(255,215,0,0.6);
+    transform: scale(0.92);
+  }
+  @media (pointer: coarse) { #mobileControls { display: flex; } }
+  @media (max-width: 500px) {
+    .ctrl-btn { width: 56px; height: 56px; font-size: 22px; border-radius: 14px; }
+    .ctrl-group { gap: 8px; }
+  }
+  @media (max-height: 500px) and (pointer: coarse) {
+    #mobileControls { padding-bottom: 6px; }
+    .ctrl-btn { width: 50px; height: 50px; font-size: 20px; }
+  }
+  #collectedBar {
+    position: absolute; top: 60px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 3px; z-index: 11;
+    pointer-events: none; flex-wrap: wrap;
+    justify-content: center; max-width: 50%;
+  }
+  .collected-item {
+    background: rgba(0,0,0,0.65);
+    color: #ffd700; font-size: 9px;
+    padding: 2px 5px; border-radius: 4px;
+    border: 1px solid rgba(255,215,0,0.3);
+    animation: collectPop 0.4s ease-out;
+    font-family: 'Press Start 2P', monospace;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+  @keyframes collectPop {
+    0% { transform: scale(0.3); opacity: 0; }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .toast-container {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 12; pointer-events: none;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+  }
+  .toast {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px; padding: 10px 20px;
+    border-radius: 6px; white-space: nowrap;
+    animation: toastUp 3.5s ease-out forwards;
+    text-shadow: 1px 1px 0 #000;
+  }
+  @keyframes toastUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    20% { opacity: 1; transform: translateY(-5px) scale(1.05); }
+    70% { opacity: 0.9; transform: translateY(-30px) scale(1); }
+    100% { opacity: 0; transform: translateY(-80px) scale(0.9); }
+  }
+  #soundToggle {
+    position: absolute; bottom: 12px; right: 12px;
+    z-index: 16; background: rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px; color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px; padding: 8px 14px;
+    cursor: pointer; user-select: none;
+    transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  #soundToggle:hover { background: rgba(255,255,255,0.2); }
+  #soundToggle.on { border-color: #ffd700; color: #ffd700; }
+
+  /* ── MOBILE RESPONSIVE ── */
+  @media (pointer: coarse) {
+    #soundToggle {
+      bottom: auto; top: 12px; right: 12px;
+      padding: 10px 16px; font-size: 11px;
+    }
+  }
+  @media (max-width: 600px) {
+    .ui-box { font-size: 10px; line-height: 1.6; }
+    #ui-overlay { padding: 10px 12px; }
+    #collectedBar { top: 48px; max-width: 70%; }
+    .collected-item { font-size: 7px; padding: 1px 3px; }
+    .toast { font-size: 10px; padding: 6px 12px; }
+    #startScreen h1, #gameOverScreen h1 { font-size: 18px; margin-bottom: 14px; }
+    #startScreen p, #gameOverScreen p { font-size: 8px; line-height: 2; max-width: 90vw; }
+    .blink { font-size: 10px; margin-top: 20px; }
+    #gameOverScreen .score { font-size: 22px; }
+  }
+  @media (max-width: 400px) {
+    .ui-box { font-size: 8px; }
+    #collectedBar { top: 40px; max-width: 80%; }
+    .collected-item { font-size: 6px; }
+    .toast { font-size: 8px; padding: 5px 8px; }
+    #startScreen h1, #gameOverScreen h1 { font-size: 14px; }
+    #startScreen p, #gameOverScreen p { font-size: 7px; line-height: 1.8; }
+  }
+  @media (max-height: 500px) {
+    #startScreen h1, #gameOverScreen h1 { font-size: 16px; margin-bottom: 8px; }
+    #startScreen p, #gameOverScreen p { font-size: 7px; line-height: 1.6; }
+    .blink { margin-top: 10px; font-size: 9px; }
+    #gameOverScreen .score { font-size: 20px; margin: 8px 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gameContainer">
+  <canvas id="game"></canvas>
+  <div id="ui-overlay">
+    <div class="ui-box">
+      <span class="label">BUDGET:</span> <span id="budgetDisplay">500€</span><br>
+      <span class="label">GERÄTE:</span> <span id="toolsDisplay">0</span>
+    </div>
+    <div class="ui-box" style="text-align:right">
+      <span class="label">LEVEL:</span> <span id="levelDisplay">1</span><br>
+      <span class="label">REKORD:</span> <span id="recordDisplay">0</span>
+    </div>
+  </div>
+  <div id="collectedBar"></div>
+  <div class="toast-container" id="toasts"></div>
+  <button id="soundToggle" onclick="toggleSound()">🔇 Sound</button>
+
+  <div id="startScreen">
+    <h1>🔨 BAUMARKT BROS. 🌻</h1>
+    <p>
+      Du bist im Baumarkt und brauchst Gartengeräte!<br><br>
+      ⬅️➡️ Laufen &nbsp;|&nbsp; ⬆️ Springen<br><br>
+      🌻 Sammle Gartengeräte (kosten Budget)<br>
+      🟡 Münzen geben +20€ Bonus<br>
+      🔵 <span style="color:#00ffcc">WD-40</span> &amp; <span style="color:#00ffcc">Panzertape</span> geben +50€ Bonus!<br>
+      🚜 <span style="color:#ff8800">Bagger</span> = 10 Sek. unverwundbar + Mitarbeiter überfahren!<br>
+      ⚠️ Meide <span style="color:#e94560">Baumarkt-Mitarbeiter</span> – verkaufen dir Unsinn!<br>
+      ⚠️ Meide <span style="color:#ff69b4">Ehefrauen</span> – klauen Budget &amp; stoppen den Bagger!<br><br>
+      Sammle so viele Geräte wie möglich,<br>bevor das Budget alle ist!
+    </p>
+    <p class="blink">TIPPEN oder ENTER zum Starten</p>
+  </div>
+
+  <div id="gameOverScreen" style="display:none">
+    <h1>GAME OVER!</h1>
+    <p>Budget aufgebraucht!</p>
+    <div class="score" id="finalScore">0 Geräte</div>
+    <p id="finalMsg"></p>
+    <p class="blink">TIPPEN oder ENTER für Neustart</p>
+  </div>
+
+  <div id="mobileControls">
+    <div class="ctrl-group">
+      <div class="ctrl-btn" data-key="ArrowLeft">◀</div>
+      <div class="ctrl-btn" data-key="ArrowRight">▶</div>
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-btn" data-key="ArrowUp">▲</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Responsive sizing - fullscreen
+let BASE_W = 800, BASE_H = 450;
+function resize() {
+  const ratio = window.innerWidth / window.innerHeight;
+  // Keep logical resolution proportional but fill screen
+  if (ratio > BASE_W / BASE_H) {
+    BASE_H = 450;
+    BASE_W = Math.round(BASE_H * ratio);
+  } else {
+    BASE_W = 800;
+    BASE_H = Math.round(BASE_W / ratio);
+  }
+  canvas.width = BASE_W;
+  canvas.height = BASE_H;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── GAME STATE ──
+const GRAVITY = 0.6, JUMP_FORCE = -11, MOVE_SPEED = 4;
+let GROUND_Y = BASE_H - 64;
+const TILE = 32;
+
+let state = 'start'; // start, playing, gameover
+let budget, tools, level, highScore = 0;
+let player, camera, platforms, gardenTools, coins, enemies, particles, floatingTexts;
+let baggerPickups; // bagger power-ups on the map
+let bonusItems; // Panzertape & WD-40
+let keys = {};
+let worldWidth;
+let frameCount = 0;
+
+const TOOL_LIST = [
+  { name: 'Rasenmäher Deluxe', price: 85, emoji: '🌿' },
+  { name: 'Heckenschere "Grüner Blitz"', price: 48, emoji: '✂️' },
+  { name: 'Opa\'s Lieblingsspaten', price: 28, emoji: '⛏️' },
+  { name: 'Endlos-Gartenschlauch', price: 38, emoji: '🚿' },
+  { name: 'Turbo-Harke 3000', price: 22, emoji: '🧹' },
+  { name: 'Profi-Schubkarre XL', price: 58, emoji: '🛒' },
+  { name: 'Laubbläser "Herbststurm"', price: 68, emoji: '🍃' },
+  { name: 'Omas Gießkanne', price: 15, emoji: '💧' },
+  { name: 'Astschere "Baumflüsterer"', price: 42, emoji: '🌳' },
+  { name: 'Vertikutierer V-Max', price: 92, emoji: '🔧' },
+  { name: 'Kettensäge "Holzfäller"', price: 125, emoji: '⚡' },
+  { name: 'Hochdruckreiniger Tsunami', price: 98, emoji: '💦' },
+  { name: 'Rasensprenger "Regentanz"', price: 32, emoji: '🌧️' },
+  { name: 'Teleskop-Baumschere', price: 55, emoji: '🔭' },
+  { name: 'Unkrautstecher "Wurzelfeind"', price: 18, emoji: '🗡️' },
+  { name: 'Solar-Mähroboter', price: 140, emoji: '🤖' },
+  { name: 'Kompost-Thermometer', price: 12, emoji: '🌡️' },
+  { name: 'Gartenkralle "Maulwurf"', price: 24, emoji: '🐾' },
+  { name: 'Rasenwalze "Plattmacher"', price: 65, emoji: '🛞' },
+  { name: 'Bewässerungscomputer 9000', price: 78, emoji: '💻' },
+  { name: 'Handrasenmäher "Retro"', price: 45, emoji: '🔄' },
+  { name: 'Fugenkratzer "Ritzenputzer"', price: 10, emoji: '🪥' },
+  { name: 'Obstpflücker "Apfelfänger"', price: 35, emoji: '🍎' },
+  { name: 'Gartenhandschuhe "Eisenfaust"', price: 16, emoji: '🧤' },
+  { name: 'Erdbohrer "Tiefstapler"', price: 72, emoji: '🕳️' },
+  { name: 'Heckenroboter "Formschnitt"', price: 110, emoji: '🦾' },
+  { name: 'Regentonne "Wassersparer"', price: 50, emoji: '🛢️' },
+  { name: 'Rasenkanten-Trimmer', price: 40, emoji: '✏️' },
+  { name: 'Gartendusche "Erfrischer"', price: 55, emoji: '🚿' },
+  { name: 'Komposter "Schwarzes Gold"', price: 60, emoji: '♻️' },
+];
+
+const EMPLOYEE_LINES = [
+  'Smart-Garden WiFi +60€!', 'Bluetooth-Spaten +50€!', 'Premium-Garantie +40€!',
+  'IoT Bewässerung +70€!', 'Gold-Edition +55€!', 'TÜV-Zertifikat +45€!',
+  'Laser-Ausrichtung +80€!', 'App-Steuerung +65€!'
+];
+
+const WIFE_LINES = [
+  'Neue Schuhe! -60€', 'Deko fürs Bad! -50€', 'Kerzen-Set! -40€',
+  'Brunch-Date! -45€', 'Yoga-Kurs! -55€', 'Blumenstrauß! -35€'
+];
+
+// ── SPRITES via pixel drawing ──
+function drawPixelMan(x, y, flip, frame) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) { ctx.scale(-1.2, 1.2); ctx.translate(-28, 0); }
+  else { ctx.scale(1.2, 1.2); }
+  // Body
+  ctx.fillStyle = '#4488ff';
+  ctx.fillRect(6, 10, 16, 14);
+  // Head
+  ctx.fillStyle = '#ffcc88';
+  ctx.fillRect(8, 0, 12, 12);
+  // Eyes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(12, 3, 3, 3);
+  ctx.fillRect(18, 3, 3, 3);
+  // Hat (Baumarkt cap)
+  ctx.fillStyle = '#e94560';
+  ctx.fillRect(6, -2, 18, 4);
+  ctx.fillRect(4, 1, 22, 2);
+  // Legs
+  ctx.fillStyle = '#3355aa';
+  const legOff = Math.sin(frame * 0.3) * 3;
+  ctx.fillRect(8, 24, 5, 8 + legOff);
+  ctx.fillRect(16, 24, 5, 8 - legOff);
+  // Shoes
+  ctx.fillStyle = '#8B4513';
+  ctx.fillRect(7, 31 + legOff, 7, 3);
+  ctx.fillRect(15, 31 - legOff, 7, 3);
+  ctx.restore();
+}
+
+function drawEmployee(x, y, frame) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1.2, 1.2);
+  // Orange vest
+  ctx.fillStyle = '#ff8c00';
+  ctx.fillRect(4, 10, 20, 16);
+  // Head
+  ctx.fillStyle = '#ffcc88';
+  ctx.fillRect(7, 0, 14, 12);
+  // Suspicious eyes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(10, 4, 3, 2);
+  ctx.fillRect(16, 4, 3, 2);
+  // Evil smile
+  ctx.fillRect(11, 8, 6, 1);
+  // Legs walking
+  const lo = Math.sin(frame * 0.2) * 3;
+  ctx.fillStyle = '#555';
+  ctx.fillRect(8, 26, 5, 8 + lo);
+  ctx.fillRect(16, 26, 5, 8 - lo);
+  ctx.fillStyle = '#333';
+  ctx.fillRect(7, 33 + lo, 7, 3);
+  ctx.fillRect(15, 33 - lo, 7, 3);
+  // Name tag
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(9, 12, 10, 5);
+  ctx.fillStyle = '#e94560';
+  ctx.fillRect(10, 13, 8, 3);
+  ctx.restore();
+}
+
+function drawWife(x, y, frame) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1.2, 1.2);
+  // Dress
+  ctx.fillStyle = '#ff69b4';
+  ctx.fillRect(4, 10, 20, 16);
+  ctx.fillRect(2, 20, 24, 8);
+  // Head
+  ctx.fillStyle = '#ffcc88';
+  ctx.fillRect(7, 0, 14, 12);
+  // Hair
+  ctx.fillStyle = '#8B4513';
+  ctx.fillRect(5, -3, 18, 6);
+  ctx.fillRect(4, 0, 4, 8);
+  ctx.fillRect(20, 0, 4, 8);
+  // Eyes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(10, 4, 3, 2);
+  ctx.fillRect(16, 4, 3, 2);
+  // Handbag
+  ctx.fillStyle = '#cc3366';
+  ctx.fillRect(22, 14, 8, 10);
+  ctx.fillRect(24, 11, 4, 4);
+  // Legs
+  const lo = Math.sin(frame * 0.15) * 2;
+  ctx.fillStyle = '#ff69b4';
+  ctx.fillRect(9, 28, 4, 6 + lo);
+  ctx.fillRect(16, 28, 4, 6 - lo);
+  ctx.fillStyle = '#cc2266';
+  ctx.fillRect(8, 33 + lo, 6, 3);
+  ctx.fillRect(15, 33 - lo, 6, 3);
+  ctx.restore();
+}
+
+// ── WORLD GENERATION ──
+function generateLevel(lvl) {
+  GROUND_Y = BASE_H - 64;
+  worldWidth = 2400 + lvl * 600;
+  platforms = [];
+  gardenTools = [];
+  coins = [];
+  enemies = [];
+  particles = [];
+  floatingTexts = [];
+  baggerPickups = [];
+  bonusItems = [];
+
+  // Ground - solid, no gaps
+  for (let x = 0; x < worldWidth; x += TILE) {
+    platforms.push({ x, y: GROUND_Y, w: TILE, h: TILE, type: 'ground' });
+  }
+
+  // Shelves (floating platforms)
+  const shelfCount = 12 + lvl * 4;
+  for (let i = 0; i < shelfCount; i++) {
+    const sx = 180 + Math.random() * (worldWidth - 400);
+    const sy = GROUND_Y - 80 - Math.random() * 140;
+    const sw = TILE * (2 + Math.floor(Math.random() * 3));
+    platforms.push({ x: sx, y: sy, w: sw, h: 12, type: 'shelf' });
+  }
+
+  // Garden tools - each tool unique, shuffle and pick from list
+  const shuffled = [...TOOL_LIST].sort(() => Math.random() - 0.5);
+  const toolCount = Math.min(shuffled.length, 10 + lvl * 3);
+  const usedX = new Set();
+  for (let i = 0; i < toolCount; i++) {
+    const t = shuffled[i];
+    const shelf = platforms[Math.floor(Math.random() * platforms.length)];
+    const px = shelf.x + Math.random() * Math.max(0, shelf.w - 28);
+    const py = shelf.y - 32;
+    const key = Math.round(px / 50);
+    if (usedX.has(key)) continue;
+    usedX.add(key);
+    gardenTools.push({
+      x: px, y: py, w: 28, h: 28,
+      name: t.name, price: Math.round(t.price * (0.8 + lvl * 0.15)),
+      emoji: t.emoji, bobOffset: Math.random() * Math.PI * 2, collected: false
+    });
+  }
+
+  // Coins
+  for (let i = 0; i < 15 + lvl * 2; i++) {
+    const cx = 100 + Math.random() * (worldWidth - 200);
+    const cy = GROUND_Y - 40 - Math.random() * 180;
+    coins.push({ x: cx, y: cy, w: 16, h: 16, collected: false, bobOffset: Math.random() * Math.PI * 2 });
+  }
+
+  // Bonus items: Panzertape & WD-40 (rarer than coins, ~4-6 per level)
+  const bonusCount = 3 + Math.floor(lvl * 0.8);
+  for (let i = 0; i < bonusCount; i++) {
+    const isWD40 = Math.random() < 0.5;
+    const bx = 200 + Math.random() * (worldWidth - 400);
+    const by = GROUND_Y - 50 - Math.random() * 150;
+    bonusItems.push({
+      x: bx, y: by, w: 22, h: 22,
+      type: isWD40 ? 'wd40' : 'tape',
+      name: isWD40 ? 'WD-40 Spray' : 'Panzertape',
+      emoji: isWD40 ? '🔵' : '⬛',
+      collected: false,
+      bobOffset: Math.random() * Math.PI * 2
+    });
+  }
+
+  // Employees
+  const empCount = 3 + lvl * 2;
+  for (let i = 0; i < empCount; i++) {
+    enemies.push({
+      x: 300 + Math.random() * (worldWidth - 400),
+      y: GROUND_Y - 43,
+      w: 34, h: 43, type: 'employee',
+      vx: (0.5 + Math.random() * 1) * (Math.random() < 0.5 ? 1 : -1),
+      line: EMPLOYEE_LINES[Math.floor(Math.random() * EMPLOYEE_LINES.length)],
+      damage: 40 + lvl * 10,
+      cooldown: 0
+    });
+  }
+
+  // Wives
+  const wifeCount = 2 + lvl;
+  for (let i = 0; i < wifeCount; i++) {
+    enemies.push({
+      x: 400 + Math.random() * (worldWidth - 500),
+      y: GROUND_Y - 43,
+      w: 36, h: 43, type: 'wife',
+      vx: (0.3 + Math.random() * 0.8) * (Math.random() < 0.5 ? 1 : -1),
+      line: WIFE_LINES[Math.floor(Math.random() * WIFE_LINES.length)],
+      damage: 35 + lvl * 8,
+      cooldown: 0
+    });
+  }
+
+  // Bagger power-ups (1-2 per level)
+  const baggerCount = Math.min(2, 1 + Math.floor(lvl / 2));
+  for (let i = 0; i < baggerCount; i++) {
+    baggerPickups.push({
+      x: 500 + Math.random() * (worldWidth - 700),
+      y: GROUND_Y - 40,
+      w: 40, h: 40,
+      collected: false,
+      bobOffset: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function initGame() {
+  budget = 500;
+  tools = 0;
+  level = 1;
+  player = {
+    x: 80, y: GROUND_Y - 43,
+    w: 34, h: 41,
+    vx: 0, vy: 0,
+    onGround: false,
+    facing: 1, frame: 0,
+    invincible: 0, flash: false,
+    baggerTimer: 0, baggerKills: 0
+  };
+  camera = { x: 0 };
+  document.getElementById('collectedBar').innerHTML = '';
+  generateLevel(1);
+  frameCount = 0;
+}
+
+// ── COLLISION ──
+function rectCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// ── PARTICLES ──
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y, vx: (Math.random() - 0.5) * 5, vy: -Math.random() * 4 - 1,
+      life: 30 + Math.random() * 20, color, size: 2 + Math.random() * 3
+    });
+  }
+}
+
+function showToast(text, color) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.color = color || '#fff';
+  el.style.background = 'rgba(0,0,0,0.7)';
+  el.textContent = text;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3600);
+}
+
+function addFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, life: 120 });
+}
+
+function addCollectedItem(emoji, name) {
+  const bar = document.getElementById('collectedBar');
+  const el = document.createElement('div');
+  el.className = 'collected-item';
+  el.textContent = `${emoji} ${name}`;
+  bar.appendChild(el);
+}
+
+// ── UPDATE ──
+function update() {
+  if (state !== 'playing') return;
+  frameCount++;
+
+  // Player input
+  const speed = player.baggerTimer > 0 ? MOVE_SPEED * 1.6 : MOVE_SPEED;
+  player.vx = 0;
+  if (keys['ArrowLeft'] || keys['a']) { player.vx = -speed; player.facing = -1; }
+  if (keys['ArrowRight'] || keys['d']) { player.vx = speed; player.facing = 1; }
+  if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && player.onGround) {
+    player.vy = JUMP_FORCE;
+    player.onGround = false;
+  }
+
+  // Physics
+  player.vy += GRAVITY;
+  player.x += player.vx;
+  player.y += player.vy;
+  player.frame++;
+
+  // Platform collision
+  player.onGround = false;
+  for (const p of platforms) {
+    if (player.x + player.w > p.x && player.x < p.x + p.w) {
+      if (player.vy >= 0 && player.y + player.h > p.y && player.y + player.h < p.y + p.h + 12) {
+        player.y = p.y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      }
+    }
+  }
+
+  // Fall into pit
+  if (player.y > BASE_H + 50) {
+    budget -= 50;
+    addFloatingText(player.x, player.y - 60, '-50€ Sturz!', '#e94560');
+    showToast('In die Grube gefallen! -50€', '#e94560');
+    player.x = camera.x + 100;
+    player.y = 50;
+    player.vy = 0;
+  }
+
+  // Boundaries
+  if (player.x < 0) player.x = 0;
+
+  // Camera
+  camera.x = player.x - BASE_W / 3;
+  if (camera.x < 0) camera.x = 0;
+  if (camera.x > worldWidth - BASE_W) camera.x = worldWidth - BASE_W;
+
+  // Invincibility timer
+  if (player.invincible > 0) {
+    player.invincible--;
+    player.flash = frameCount % 6 < 3;
+  } else {
+    player.flash = false;
+  }
+
+  // Bagger timer countdown
+  if (player.baggerTimer > 0) {
+    player.baggerTimer--;
+    if (player.baggerTimer <= 0) {
+      showToast('Bagger-Zeit vorbei!', '#ff6600');
+      player.baggerKills = 0;
+    }
+  }
+
+  // Collect bagger power-ups
+  for (const b of baggerPickups) {
+    if (!b.collected && rectCollide(player, b)) {
+      b.collected = true;
+      player.baggerTimer = 600; // 10 seconds at 60fps
+      player.baggerKills = 0;
+      spawnParticles(b.x + 20, b.y + 20, '#ff6600', 15);
+      addFloatingText(b.x, b.y - 15, '🚜 BAGGER-MODUS!', '#ff6600');
+      showToast('🚜 BAGGER! 10 Sek. unverwundbar!', '#ff6600');
+    }
+  }
+
+  // Collect tools
+  for (const t of gardenTools) {
+    if (!t.collected && rectCollide(player, t)) {
+      t.collected = true;
+      budget -= t.price;
+      tools++;
+      spawnParticles(t.x + 12, t.y + 12, '#ffd700', 10);
+      addFloatingText(t.x, t.y - 10, `${t.emoji} ${t.name} -${t.price}€`, '#ffd700');
+      showToast(`${t.emoji} ${t.name} (-${t.price}€)`, '#ffd700');
+      addCollectedItem(t.emoji, t.name);
+    }
+  }
+
+  // Collect coins
+  for (const c of coins) {
+    if (!c.collected && rectCollide(player, c)) {
+      c.collected = true;
+      budget += 20;
+      spawnParticles(c.x + 8, c.y + 8, '#ffd700', 6);
+      addFloatingText(c.x, c.y - 10, '+20€', '#00ff88');
+      showToast('Gutschein! +20€', '#00ff88');
+    }
+  }
+
+  // Collect bonus items (Panzertape & WD-40)
+  for (const b of bonusItems) {
+    if (!b.collected && rectCollide(player, b)) {
+      b.collected = true;
+      budget += 50;
+      spawnParticles(b.x + 11, b.y + 11, b.type === 'wd40' ? '#0066ff' : '#888', 12);
+      addFloatingText(b.x, b.y - 10, `${b.emoji} ${b.name} +50€!`, '#00ffcc');
+      showToast(`${b.emoji} ${b.name}! +50€ YEAH!`, '#00ffcc');
+      playSfxYeah();
+    }
+  }
+
+  // Enemy AI & collision
+  for (let ei = enemies.length - 1; ei >= 0; ei--) {
+    const e = enemies[ei];
+    if (e.dead) continue;
+    e.x += e.vx;
+    // bounce off edges
+    if (e.x < 20 || e.x > worldWidth - 40) e.vx *= -1;
+    if (e.cooldown > 0) e.cooldown--;
+
+    if (!rectCollide(player, e)) continue;
+
+    // BAGGER MODE active
+    if (player.baggerTimer > 0) {
+      if (e.type === 'employee') {
+        // Overrun employee!
+        e.dead = true;
+        player.baggerKills++;
+        spawnParticles(e.x + 14, e.y + 17, '#ff8c00', 15);
+        addFloatingText(e.x, e.y - 20, '🚜 ÜBERFAHREN!', '#ff6600');
+        showToast(`🚜 Mitarbeiter plattgemacht!`, '#ff6600');
+      } else if (e.type === 'wife') {
+        // Wife stops the bagger!
+        player.baggerTimer = 0;
+        player.baggerKills = 0;
+        e.cooldown = 120;
+        spawnParticles(player.x + 14, player.y + 17, '#ff69b4', 12);
+        addFloatingText(player.x, player.y - 20, '👜 BAGGER GESTOPPT!', '#ff69b4');
+        showToast('👜 Ehefrau stoppt den Bagger!', '#ff69b4');
+        // Still takes damage from wife
+        budget -= e.damage;
+        player.invincible = 60;
+        player.vx = (player.x < e.x ? -6 : 6);
+        player.vy = -5;
+      }
+    } else {
+      // Normal collision (no bagger)
+      if (player.invincible <= 0 && e.cooldown <= 0) {
+        budget -= e.damage;
+        player.invincible = 60;
+        e.cooldown = 90;
+        spawnParticles(player.x + 14, player.y + 17, e.type === 'employee' ? '#ff8c00' : '#ff69b4', 8);
+        addFloatingText(player.x, player.y - 20, e.line, e.type === 'employee' ? '#ff8c00' : '#ff69b4');
+        showToast(e.line, e.type === 'employee' ? '#ff8c00' : '#ff69b4');
+        player.vx = (player.x < e.x ? -6 : 6);
+        player.vy = -5;
+      }
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Floating texts
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    floatingTexts[i].y -= 0.5;
+    floatingTexts[i].life--;
+    if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+  }
+
+  // Level progress - if player reaches end
+  if (player.x > worldWidth - 100) {
+    level++;
+    showToast(`Level ${level}!`, '#00ff88');
+    generateLevel(level);
+    player.x = 80;
+    player.y = GROUND_Y - 43;
+    player.vy = 0;
+    budget += 50; // bonus for clearing level
+  }
+
+  // Update UI
+  document.getElementById('budgetDisplay').textContent = budget + '€';
+  document.getElementById('budgetDisplay').style.color = budget < 80 ? '#e94560' : '#fff';
+  document.getElementById('toolsDisplay').textContent = tools;
+  document.getElementById('levelDisplay').textContent = level;
+
+  // Game over
+  if (budget <= 0) {
+    budget = 0;
+    state = 'gameover';
+    if (tools > highScore) highScore = tools;
+    document.getElementById('recordDisplay').textContent = highScore;
+    document.getElementById('finalScore').textContent = tools + ' Geräte gesammelt!';
+    const msgs = [
+      'Nicht schlecht für einen Anfänger!',
+      'Deine Frau wäre stolz... oder auch nicht.',
+      'Der Baumarkt dankt für deinen Besuch!',
+      'Nächstes Mal: mehr Budget, weniger Ehefrauen!',
+    ];
+    document.getElementById('finalMsg').textContent = msgs[Math.min(Math.floor(tools / 3), msgs.length - 1)];
+    document.getElementById('gameOverScreen').style.display = 'flex';
+  }
+}
+
+// ── DRAW ──
+function drawBackground() {
+  // Sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, BASE_H);
+  grad.addColorStop(0, '#87CEEB');
+  grad.addColorStop(0.6, '#c9e8f5');
+  grad.addColorStop(1, '#f0e6d3');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, BASE_W, BASE_H);
+
+  // Baumarkt signs in background (parallax)
+  ctx.fillStyle = 'rgba(255,140,0,0.15)';
+  const px = -camera.x * 0.2;
+  for (let i = 0; i < 5; i++) {
+    const bx = px + i * 400;
+    ctx.fillRect(bx, 60, 180, 100);
+    ctx.fillStyle = 'rgba(200,80,0,0.1)';
+    ctx.fillRect(bx + 10, 70, 160, 30);
+    ctx.fillStyle = 'rgba(255,140,0,0.15)';
+  }
+
+  // Distant shelves (parallax)
+  ctx.fillStyle = 'rgba(139,90,43,0.12)';
+  const px2 = -camera.x * 0.4;
+  for (let i = 0; i < 12; i++) {
+    ctx.fillRect(px2 + i * 200, 140 + (i % 3) * 50, 120, 8);
+    ctx.fillRect(px2 + i * 200, 140 + (i % 3) * 50 + 8, 4, 80);
+    ctx.fillRect(px2 + i * 200 + 116, 140 + (i % 3) * 50 + 8, 4, 80);
+  }
+}
+
+function drawPlatforms() {
+  for (const p of platforms) {
+    const sx = p.x - camera.x;
+    if (sx > BASE_W + 40 || sx + p.w < -40) continue;
+
+    if (p.type === 'ground') {
+      // Ground tiles
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(sx, p.y, p.w, p.h);
+      ctx.fillStyle = '#a08060';
+      ctx.fillRect(sx, p.y, p.w, 4);
+      // Floor pattern
+      ctx.fillStyle = '#7a6548';
+      ctx.fillRect(sx + 4, p.y + 10, 8, 8);
+      ctx.fillRect(sx + 18, p.y + 16, 10, 6);
+    } else {
+      // Shelf
+      ctx.fillStyle = '#c49a6c';
+      ctx.fillRect(sx, p.y, p.w, p.h);
+      ctx.fillStyle = '#d4aa7c';
+      ctx.fillRect(sx, p.y, p.w, 3);
+      // Metal brackets
+      ctx.fillStyle = '#888';
+      ctx.fillRect(sx + 4, p.y + p.h, 3, 12);
+      ctx.fillRect(sx + p.w - 7, p.y + p.h, 3, 12);
+    }
+  }
+}
+
+function drawTools() {
+  for (const t of gardenTools) {
+    if (t.collected) continue;
+    const sx = t.x - camera.x;
+    if (sx > BASE_W + 30 || sx < -30) continue;
+    const bob = Math.sin(frameCount * 0.05 + t.bobOffset) * 3;
+
+    // Glow
+    ctx.fillStyle = 'rgba(255,215,0,0.2)';
+    ctx.beginPath();
+    ctx.arc(sx + 12, t.y + 12 + bob, 18, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Emoji
+    ctx.font = '18px serif';
+    ctx.fillText(t.emoji, sx + 2, t.y + 20 + bob);
+
+    // Price tag
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(sx - 2, t.y - 10 + bob, 32, 11);
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillText(t.price + '€', sx, t.y - 2 + bob);
+  }
+}
+
+function drawCoins() {
+  for (const c of coins) {
+    if (c.collected) continue;
+    const sx = c.x - camera.x;
+    if (sx > BASE_W + 20 || sx < -20) continue;
+    const bob = Math.sin(frameCount * 0.08 + c.bobOffset) * 2;
+
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    const squeeze = Math.abs(Math.sin(frameCount * 0.06 + c.bobOffset));
+    ctx.ellipse(sx + 8, c.y + 8 + bob, 8 * Math.max(0.3, squeeze), 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('€', sx + 8, c.y + 12 + bob);
+    ctx.textAlign = 'left';
+  }
+}
+
+function drawBonusItems() {
+  for (const b of bonusItems) {
+    if (b.collected) continue;
+    const sx = b.x - camera.x;
+    if (sx > BASE_W + 30 || sx < -30) continue;
+    const bob = Math.sin(frameCount * 0.06 + b.bobOffset) * 3;
+    const pulse = 1 + Math.sin(frameCount * 0.1) * 0.1;
+
+    // Glow
+    ctx.fillStyle = b.type === 'wd40' ? 'rgba(0,100,255,0.25)' : 'rgba(150,150,150,0.25)';
+    ctx.beginPath();
+    ctx.arc(sx + 11, b.y + 11 + bob, 18 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(sx, b.y + bob);
+
+    if (b.type === 'wd40') {
+      // WD-40 can
+      ctx.fillStyle = '#0044cc';
+      ctx.fillRect(4, 3, 14, 18);
+      // Red cap
+      ctx.fillStyle = '#cc0000';
+      ctx.fillRect(6, 0, 10, 5);
+      // Yellow band
+      ctx.fillStyle = '#ffcc00';
+      ctx.fillRect(4, 8, 14, 4);
+      // Label text
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 5px sans-serif';
+      ctx.fillText('WD', 6, 17);
+    } else {
+      // Panzertape roll
+      ctx.fillStyle = '#555';
+      ctx.beginPath();
+      ctx.arc(11, 11, 10, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner hole
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(11, 11, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Shine
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.arc(8, 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // +50€ tag
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(sx - 2, b.y - 12 + bob, 28, 11);
+    ctx.fillStyle = '#00ffcc';
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillText('+50€', sx, b.y - 3 + bob);
+  }
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const sx = e.x - camera.x;
+    if (sx > BASE_W + 40 || sx < -40) continue;
+
+    if (e.type === 'employee') {
+      drawEmployee(sx, e.y, frameCount);
+    } else {
+      drawWife(sx, e.y, frameCount);
+    }
+
+    // Warning indicator above
+    if (Math.abs(player.x - e.x) < 120) {
+      ctx.fillStyle = e.type === 'employee' ? 'rgba(255,140,0,0.8)' : 'rgba(255,105,180,0.8)';
+      ctx.font = '7px "Press Start 2P"';
+      const txt = e.type === 'employee' ? '⚠️ BERATER!' : '⚠️ EHEFRAU!';
+      ctx.fillText(txt, sx - 10, e.y - 10 + Math.sin(frameCount * 0.1) * 2);
+    }
+  }
+}
+
+function drawBaggerPickups() {
+  for (const b of baggerPickups) {
+    if (b.collected) continue;
+    const sx = b.x - camera.x;
+    if (sx > BASE_W + 50 || sx < -50) continue;
+    const bob = Math.sin(frameCount * 0.04 + b.bobOffset) * 4;
+
+    // Glow ring
+    ctx.fillStyle = 'rgba(255,102,0,0.25)';
+    ctx.beginPath();
+    ctx.arc(sx + 20, b.y + 20 + bob, 28, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bagger body
+    ctx.save();
+    ctx.translate(sx, b.y + bob);
+    // Tracks
+    ctx.fillStyle = '#333';
+    ctx.fillRect(2, 30, 36, 8);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(4, 31, 5, 6); ctx.fillRect(12, 31, 5, 6);
+    ctx.fillRect(20, 31, 5, 6); ctx.fillRect(28, 31, 5, 6);
+    // Body
+    ctx.fillStyle = '#ff8800';
+    ctx.fillRect(4, 14, 28, 16);
+    // Cabin
+    ctx.fillStyle = '#ffa500';
+    ctx.fillRect(8, 4, 16, 12);
+    ctx.fillStyle = '#aaddff';
+    ctx.fillRect(10, 6, 12, 7);
+    // Arm
+    ctx.fillStyle = '#cc7000';
+    ctx.fillRect(30, 8, 12, 4);
+    ctx.fillRect(38, 8, 4, 16);
+    // Bucket
+    ctx.fillStyle = '#996600';
+    ctx.fillRect(36, 22, 8, 6);
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(sx - 4, b.y - 14 + bob, 48, 13);
+    ctx.fillStyle = '#ff8800';
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillText('BAGGER!', sx, b.y - 4 + bob);
+  }
+}
+
+function drawBaggerHUD() {
+  if (player.baggerTimer <= 0) return;
+  const secs = Math.ceil(player.baggerTimer / 60);
+  const ratio = player.baggerTimer / 600;
+
+  // Bagger timer bar at top center
+  const barW = 200, barH = 14;
+  const bx = (BASE_W - barW) / 2, by = 50;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+  ctx.fillStyle = ratio > 0.3 ? '#ff8800' : '#e94560';
+  ctx.fillRect(bx, by, barW * ratio, barH);
+  // Pulsing border when low
+  if (ratio <= 0.3) {
+    ctx.strokeStyle = `rgba(233,69,96,${0.5 + Math.sin(frameCount * 0.2) * 0.5})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx - 2, by - 2, barW + 4, barH + 4);
+  }
+  ctx.fillStyle = '#fff';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.textAlign = 'center';
+  ctx.fillText(`🚜 BAGGER ${secs}s`, BASE_W / 2, by + 11);
+  ctx.textAlign = 'left';
+}
+
+function drawPlayer() {
+  if (player.flash) return;
+  const sx = player.x - camera.x;
+
+  if (player.baggerTimer > 0) {
+    // Draw bagger around player
+    ctx.save();
+    ctx.translate(sx - 10, player.y - 8);
+    if (player.facing === -1) {
+      ctx.scale(-1, 1);
+      ctx.translate(-54, 0);
+    }
+    // Tracks
+    ctx.fillStyle = '#333';
+    ctx.fillRect(0, 40, 54, 10);
+    ctx.fillStyle = '#555';
+    for (let i = 0; i < 5; i++) ctx.fillRect(3 + i * 10, 41, 7, 8);
+    // Body
+    ctx.fillStyle = '#ff8800';
+    ctx.fillRect(4, 16, 40, 24);
+    // Cabin with player visible
+    ctx.fillStyle = '#ffa500';
+    ctx.fillRect(10, 2, 24, 16);
+    ctx.fillStyle = '#aaddff';
+    ctx.fillRect(13, 4, 18, 10);
+    // Player head in cabin
+    ctx.fillStyle = '#ffcc88';
+    ctx.fillRect(18, 5, 8, 8);
+    ctx.fillStyle = '#e94560';
+    ctx.fillRect(17, 3, 10, 3);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(20, 7, 2, 2);
+    ctx.fillRect(24, 7, 2, 2);
+    // Arm
+    ctx.fillStyle = '#cc7000';
+    ctx.fillRect(40, 10, 16, 5);
+    ctx.fillRect(52, 10, 5, 20);
+    // Bucket
+    ctx.fillStyle = '#996600';
+    ctx.fillRect(49, 28, 10, 8);
+    // Sparks when moving
+    if (Math.abs(player.vx) > 0 && frameCount % 4 < 2) {
+      ctx.fillStyle = '#ffdd00';
+      ctx.fillRect(Math.random() * 50, 42 + Math.random() * 6, 3, 3);
+    }
+    ctx.restore();
+
+    // Ground shake effect
+    if (Math.abs(player.vx) > 0) {
+      spawnParticles(player.x + (player.facing === 1 ? 0 : 34), player.y + 40, '#8B7355', 1);
+    }
+  } else {
+    drawPixelMan(sx, player.y, player.facing === -1, player.frame);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const sx = p.x - camera.x;
+    ctx.globalAlpha = p.life / 50;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(sx, p.y, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFloatingTexts() {
+  for (const ft of floatingTexts) {
+    const sx = ft.x - camera.x;
+    ctx.globalAlpha = Math.min(1, ft.life / 40);
+    ctx.fillStyle = ft.color;
+    ctx.font = '8px "Press Start 2P"';
+    ctx.fillText(ft.text, sx - 40, ft.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawProgressBar() {
+  // Level progress at bottom
+  const progress = player.x / worldWidth;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(10, BASE_H - 14, BASE_W - 20, 8);
+  const grad = ctx.createLinearGradient(10, 0, BASE_W - 10, 0);
+  grad.addColorStop(0, '#00ff88');
+  grad.addColorStop(1, '#ffd700');
+  ctx.fillStyle = grad;
+  ctx.fillRect(10, BASE_H - 14, (BASE_W - 20) * progress, 8);
+  ctx.fillStyle = '#fff';
+  ctx.font = '6px "Press Start 2P"';
+  ctx.fillText('🏠 START', 12, BASE_H - 5);
+  ctx.textAlign = 'right';
+  ctx.fillText('AUSGANG ➡️', BASE_W - 12, BASE_H - 5);
+  ctx.textAlign = 'left';
+
+  // Budget bar
+  const budgetRatio = Math.max(0, budget / 500);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(10, BASE_H - 26, 150, 8);
+  ctx.fillStyle = budgetRatio > 0.3 ? '#00cc66' : '#e94560';
+  ctx.fillRect(10, BASE_H - 26, 150 * budgetRatio, 8);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, BASE_W, BASE_H);
+  drawBackground();
+  drawPlatforms();
+  drawCoins();
+  drawBonusItems();
+  drawTools();
+  drawBaggerPickups();
+  drawEnemies();
+  drawPlayer();
+  drawParticles();
+  drawFloatingTexts();
+  drawProgressBar();
+  drawBaggerHUD();
+}
+
+// ── GAME LOOP ──
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ── INPUT ──
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'Enter') {
+    if (state === 'start') {
+      state = 'playing';
+      initGame();
+      document.getElementById('startScreen').style.display = 'none';
+    } else if (state === 'gameover') {
+      state = 'playing';
+      initGame();
+      document.getElementById('gameOverScreen').style.display = 'none';
+    }
+  }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+    e.preventDefault();
+  }
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// Touch / click for start
+['click', 'touchstart'].forEach(evt => {
+  document.getElementById('startScreen').addEventListener(evt, e => {
+    e.preventDefault();
+    if (state === 'start') {
+      state = 'playing'; initGame();
+      document.getElementById('startScreen').style.display = 'none';
+    }
+  });
+  document.getElementById('gameOverScreen').addEventListener(evt, e => {
+    e.preventDefault();
+    if (state === 'gameover') {
+      state = 'playing'; initGame();
+      document.getElementById('gameOverScreen').style.display = 'none';
+    }
+  });
+});
+
+// Mobile controls - robust multi-touch
+document.querySelectorAll('.ctrl-btn').forEach(btn => {
+  const key = btn.dataset.key;
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation();
+    keys[key] = true;
+    btn.classList.add('pressed');
+  }, { passive: false });
+  btn.addEventListener('touchend', e => {
+    e.preventDefault(); e.stopPropagation();
+    keys[key] = false;
+    btn.classList.remove('pressed');
+  }, { passive: false });
+  btn.addEventListener('touchcancel', e => {
+    keys[key] = false;
+    btn.classList.remove('pressed');
+  });
+  btn.addEventListener('mousedown', e => { e.preventDefault(); keys[key] = true; btn.classList.add('pressed'); });
+  btn.addEventListener('mouseup', e => { keys[key] = false; btn.classList.remove('pressed'); });
+  btn.addEventListener('mouseleave', e => { keys[key] = false; btn.classList.remove('pressed'); });
+});
+
+// Prevent all default touch on canvas (no scrolling, no zoom)
+canvas.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+
+// Start loop
+initGame();
+gameLoop();
+
+// ── TETRIS THEME MUSIC (Korobeiniki) via Web Audio API ──
+let audioCtx = null;
+let masterGain = null;
+let soundOn = false;
+let musicTimeout = null;
+let activeOscillators = [];
+
+const TETRIS_MELODY = [
+  [76,2],[71,1],[72,1],[74,2],[72,1],[71,1],
+  [69,2],[69,1],[72,1],[76,2],[74,1],[72,1],
+  [71,2],[71,1],[72,1],[74,2],[76,2],
+  [72,2],[69,2],[69,2],[0,2],
+  [0,1],[74,2],[77,1],[81,2],[79,1],[77,1],
+  [76,2],[76,1],[72,1],[76,2],[74,1],[72,1],
+  [71,2],[71,1],[72,1],[74,2],[76,2],
+  [72,2],[69,2],[69,2],[0,2],
+];
+
+const TETRIS_BASS = [
+  [52,2],[57,2],[53,2],[57,2],
+  [54,2],[57,2],[53,2],[57,2],
+  [52,2],[57,2],[53,2],[57,2],
+  [54,2],[54,2],[57,2],[0,2],
+  [52,2],[57,2],[53,2],[57,2],
+  [54,2],[57,2],[53,2],[57,2],
+  [52,2],[57,2],[53,2],[57,2],
+  [54,2],[54,2],[57,2],[0,2],
+];
+
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playNote(freq, startTime, duration, type, gainVal) {
+  if (!audioCtx || !masterGain) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(gainVal, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration - 0.02);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+  activeOscillators.push(osc);
+  osc.onended = () => {
+    const idx = activeOscillators.indexOf(osc);
+    if (idx > -1) activeOscillators.splice(idx, 1);
+  };
+}
+
+// "Yeah!" jingle - triumphant ascending arpeggio
+function playSfxYeah() {
+  if (!soundOn) return;
+  // Create a temporary audio context if music is off but sound was toggled on
+  let ctx = audioCtx;
+  let dest = masterGain;
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    dest = ctx.createGain();
+    dest.gain.value = 1;
+    dest.connect(ctx.destination);
+  }
+  const now = ctx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    const t = now + i * 0.08;
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  });
+  // Final chord
+  [523.25, 659.25, 1046.5].forEach(freq => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const t = now + 0.32;
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.55);
+  });
+}
+
+function playTetrisLoop() {
+  if (!soundOn || !audioCtx) return;
+  const tempo = 140;
+  const eighth = 60 / tempo / 2;
+  const now = audioCtx.currentTime + 0.05;
+  let melodyTime = now;
+  let totalDuration = 0;
+
+  for (const [note, dur] of TETRIS_MELODY) {
+    const d = dur * eighth;
+    if (note > 0) playNote(midiToFreq(note), melodyTime, d * 0.9, 'square', 0.08);
+    melodyTime += d;
+    totalDuration = melodyTime - now;
+  }
+
+  let bassTime = now;
+  for (const [note, dur] of TETRIS_BASS) {
+    const d = dur * eighth;
+    if (note > 0) playNote(midiToFreq(note), bassTime, d * 0.85, 'triangle', 0.06);
+    bassTime += d;
+  }
+
+  musicTimeout = setTimeout(() => {
+    if (soundOn) playTetrisLoop();
+  }, totalDuration * 1000 - 50);
+}
+
+function stopAllSound() {
+  if (musicTimeout) { clearTimeout(musicTimeout); musicTimeout = null; }
+  // Kill all active oscillators immediately
+  for (const osc of activeOscillators) {
+    try { osc.stop(0); } catch(e) {}
+  }
+  activeOscillators = [];
+  // Close audio context entirely
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+    masterGain = null;
+  }
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  const btn = document.getElementById('soundToggle');
+  if (soundOn) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1;
+    masterGain.connect(audioCtx.destination);
+    btn.textContent = '🔊 Sound';
+    btn.classList.add('on');
+    playTetrisLoop();
+  } else {
+    btn.textContent = '🔇 Sound';
+    btn.classList.remove('on');
+    stopAllSound();
+  }
+}
+</script>
+
+</body>
+</html>
