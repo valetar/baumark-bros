@@ -1362,16 +1362,10 @@ function playNote(freq, startTime, duration, type, gainVal) {
 
 // "Yeah!" jingle - triumphant ascending arpeggio
 function playSfxYeah() {
-  if (!soundOn) return;
-  // Create a temporary audio context if music is off but sound was toggled on
+  if (!soundOn || !audioCtx || !masterGain) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   let ctx = audioCtx;
   let dest = masterGain;
-  if (!ctx) {
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    dest = ctx.createGain();
-    dest.gain.value = 1;
-    dest.connect(ctx.destination);
-  }
   const now = ctx.currentTime;
   const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
   notes.forEach((freq, i) => {
@@ -1405,6 +1399,7 @@ function playSfxYeah() {
 
 function playTetrisLoop() {
   if (!soundOn || !audioCtx) return;
+  if (audioCtx.state === 'suspended') { audioCtx.resume(); return; }
   const tempo = 140;
   const eighth = 60 / tempo / 2;
   const now = audioCtx.currentTime + 0.05;
@@ -1453,9 +1448,12 @@ function toggleSound() {
     masterGain = audioCtx.createGain();
     masterGain.gain.value = 1;
     masterGain.connect(audioCtx.destination);
+    // iOS Safari requires resume() from a user gesture
+    audioCtx.resume().then(() => {
+      playTetrisLoop();
+    });
     btn.textContent = '🔊 Sound';
     btn.classList.add('on');
-    playTetrisLoop();
   } else {
     btn.textContent = '🔇 Sound';
     btn.classList.remove('on');
