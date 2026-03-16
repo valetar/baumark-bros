@@ -233,6 +233,57 @@
     .blink { margin-top: 10px; font-size: 9px; }
     #gameOverScreen .score { font-size: 20px; margin: 8px 0; }
   }
+
+  /* ── HOMESCREEN HINT BANNER ── */
+  #homescreenHint {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 30;
+    background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.85));
+    color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    text-align: center;
+    padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)) 20px;
+    animation: slideUp 0.4s ease-out;
+  }
+  #homescreenHint .hint-text {
+    font-size: 8px;
+    line-height: 2;
+    color: #ccc;
+  }
+  #homescreenHint .hint-icon {
+    font-size: 22px;
+    display: block;
+    margin-bottom: 8px;
+  }
+  #homescreenHint .hint-highlight {
+    color: #ffd700;
+    font-size: 9px;
+  }
+  #homescreenHint .hint-close {
+    position: absolute;
+    top: 8px; right: 12px;
+    background: none; border: none;
+    color: #888; font-size: 16px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    font-family: sans-serif;
+  }
+  #homescreenHint .hint-arrow {
+    display: block;
+    font-size: 16px;
+    margin-top: 4px;
+    animation: bounce 1.5s infinite;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+  }
 </style>
 </head>
 <body>
@@ -252,6 +303,17 @@
   <div id="collectedBar"></div>
   <div class="toast-container" id="toasts"></div>
   <button id="soundToggle" onclick="toggleSound()">🔇 Sound</button>
+
+  <div id="homescreenHint">
+    <button class="hint-close" onclick="dismissHint()">&times;</button>
+    <span class="hint-icon">📲</span>
+    <span class="hint-highlight">Zum Homescreen hinzufügen!</span><br>
+    <span class="hint-text">
+      Tippe auf <span style="font-size:14px;vertical-align:middle">⬆️</span> (Teilen)<br>
+      dann <span style="color:#ffd700">"Zum Home-Bildschirm"</span>
+    </span>
+    <span class="hint-arrow">▼</span>
+  </div>
 
   <div id="startScreen">
     <h1>🔨 BAUMARKT BROS. 🌻</h1>
@@ -1441,6 +1503,38 @@ function stopAllSound() {
     masterGain = null;
   }
 }
+
+// ── HOMESCREEN HINT ──
+function dismissHint() {
+  document.getElementById('homescreenHint').style.display = 'none';
+  try { localStorage.setItem('bb_hint_dismissed', '1'); } catch(e) {}
+}
+
+(function showHomescreenHint() {
+  // Only show on iOS Safari, not in standalone/PWA mode
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  const isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|EdgiOS/.test(navigator.userAgent);
+
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('bb_hint_dismissed') === '1'; } catch(e) {}
+
+  if (isIOS && isSafari && !isStandalone && !dismissed) {
+    // Show after a short delay so it doesn't distract from the start screen
+    setTimeout(() => {
+      document.getElementById('homescreenHint').style.display = 'block';
+      // Auto-hide after 12 seconds
+      setTimeout(() => {
+        const hint = document.getElementById('homescreenHint');
+        if (hint.style.display !== 'none') {
+          hint.style.display = 'none';
+        }
+      }, 12000);
+    }, 3000);
+  }
+})();
 
 function toggleSound() {
   soundOn = !soundOn;
